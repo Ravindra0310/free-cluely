@@ -1,6 +1,11 @@
 {
-  "name": "interview-coder",
+  "name": "free-cluely",
   "version": "1.0.0",
+  "description": "An open-source, stealth desktop AI assistant powered by Ollama and Google Gemini for real-time coding, technical interviews, and problem solving.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ravindra0310/free-cluely.git"
+  },
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "rimraf dist dist-electron",
