@@ -14,6 +14,7 @@ import {
 } from "../components/ui/toast"
 import ExtraScreenshotsQueueHelper from "../components/Solutions/SolutionCommands"
 import { diffLines } from "diff"
+import FormattedText, { cleanCodeFence, detectLanguage } from "../components/ui/FormattedText"
 
 type DiffLine = {
   value: string
@@ -38,35 +39,34 @@ const CodeComparisonSection = ({
   newCode: string | null
   isLoading: boolean
 }) => {
-  const computeDiff = () => {
-    if (!oldCode || !newCode) return { leftLines: [], rightLines: [] }
+  const cleanedOld = oldCode ? cleanCodeFence(oldCode) : { code: "", language: "" }
+  const cleanedNew = newCode ? cleanCodeFence(newCode) : { code: "", language: "" }
+  const detectedLang = cleanedNew.language || cleanedOld.language || detectLanguage(cleanedNew.code || cleanedOld.code) || "clike"
 
-    // Normalize line endings and clean up the code
+  const computeDiff = () => {
+    if (!cleanedOld.code || !cleanedNew.code) return { leftLines: [], rightLines: [] }
+
     const normalizeCode = (code: string) => {
       return code
-        .replace(/\r\n/g, "\n") // Convert Windows line endings to Unix
-        .replace(/\r/g, "\n") // Convert remaining carriage returns
-        .trim() // Remove leading/trailing whitespace
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .trim()
     }
 
-    const normalizedOldCode = normalizeCode(oldCode)
-    const normalizedNewCode = normalizeCode(newCode)
+    const normalizedOldCode = normalizeCode(cleanedOld.code)
+    const normalizedNewCode = normalizeCode(cleanedNew.code)
 
-    // Generate the diff
     const diff = diffLines(normalizedOldCode, normalizedNewCode, {
       newlineIsToken: true,
-      ignoreWhitespace: true // Changed to true to better handle whitespace differences
+      ignoreWhitespace: true
     })
 
-    // Process the diff to create parallel arrays
     const leftLines: DiffLine[] = []
     const rightLines: DiffLine[] = []
 
     diff.forEach((part) => {
       if (part.added) {
-        // Add empty lines to left side
         leftLines.push(...Array(part.count || 0).fill({ value: "" }))
-        // Add new lines to right side, filter out empty lines at the end
         rightLines.push(
           ...part.value
             .split("\n")
@@ -77,7 +77,6 @@ const CodeComparisonSection = ({
             }))
         )
       } else if (part.removed) {
-        // Add removed lines to left side, filter out empty lines at the end
         leftLines.push(
           ...part.value
             .split("\n")
@@ -87,10 +86,8 @@ const CodeComparisonSection = ({
               removed: true
             }))
         )
-        // Add empty lines to right side
         rightLines.push(...Array(part.count || 0).fill({ value: "" }))
       } else {
-        // Add unchanged lines to both sides
         const lines = part.value.split("\n").filter((line) => line.length > 0)
         leftLines.push(...lines.map((line) => ({ value: line })))
         rightLines.push(...lines.map((line) => ({ value: line })))
@@ -126,7 +123,7 @@ const CodeComparisonSection = ({
             </div>
             <div className="p-3 overflow-x-auto">
               <SyntaxHighlighter
-                language="python"
+                language={detectedLang}
                 style={dracula}
                 customStyle={{
                   maxWidth: "100%",
@@ -163,7 +160,7 @@ const CodeComparisonSection = ({
             </div>
             <div className="p-3 overflow-x-auto">
               <SyntaxHighlighter
-                language="python"
+                language={detectedLang}
                 style={dracula}
                 customStyle={{
                   maxWidth: "100%",

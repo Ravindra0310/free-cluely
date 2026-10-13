@@ -8,7 +8,10 @@ interface OllamaResponse {
 
 export class LLMHelper {
   private model: GenerativeModel | null = null
-  private readonly systemPrompt = `You are Wingman AI, a helpful, proactive assistant for any kind of problem or situation (not just coding). For any user input, analyze the situation, provide a clear problem statement, relevant context, and suggest several possible responses or actions the user could take next. Always explain your reasoning. Present your suggestions as a list of options or next steps.`
+  private readonly systemPrompt = `You are Wingman AI, an expert technical assistant, coding tutor, and problem solver. When answering questions—especially DSA (Data Structures & Algorithms) or programming questions:
+- Provide clear, well-structured, and properly formatted solutions.
+- Format all code examples using markdown code blocks with explicit language tags (e.g. \`\`\`cpp, \`\`\`python, \`\`\`java, \`\`\`javascript).
+- Structure responses with headings, bullet points, time complexity, and space complexity where applicable.`
   private useOllama: boolean = false
   private ollamaModel: string = "llama3.2"
   private ollamaUrl: string = "http://localhost:11434"
@@ -76,6 +79,36 @@ export class LLMHelper {
       return data.response
     } catch (error) {
       console.error("[LLMHelper] Error calling Ollama:", error)
+      throw new Error(`Failed to connect to Ollama: ${error.message}. Make sure Ollama is running on ${this.ollamaUrl}`)
+    }
+  }
+
+  private async callOllamaChat(messages: Array<{ role: string; content: string }>): Promise<string> {
+    try {
+      const response = await fetch(`${this.ollamaUrl}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.ollamaModel,
+          messages: messages,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            top_p: 0.9,
+          }
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Ollama Chat API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return data.message?.content || data.response || ""
+    } catch (error: any) {
+      console.error("[LLMHelper] Error calling Ollama chat:", error)
       throw new Error(`Failed to connect to Ollama: ${error.message}. Make sure Ollama is running on ${this.ollamaUrl}`)
     }
   }
@@ -253,25 +286,58 @@ export class LLMHelper {
     }
   }
 
-  public async chatWithGemini(message: string): Promise<string> {
+  public async chatWithHistory(chatMessages: Array<{ role: "user" | "gemini"; text: string }>): Promise<string> {
     try {
+      if (!chatMessages || chatMessages.length === 0) {
+        return ""
+      }
+
       if (this.useOllama) {
-        return this.callOllama(message);
+        const ollamaMessages: Array<{ role: string; content: string }> = [
+          { role: "system", content: this.systemPrompt }
+        ]
+        chatMessages.forEach((msg) => {
+          ollamaMessages.push({
+            role: msg.role === "user" ? "user" : "assistant",
+            content: msg.text
+          })
+        })
+        return await this.callOllamaChat(ollamaMessages)
       } else if (this.model) {
-        const result = await this.model.generateContent(message);
-        const response = await result.response;
-        return response.text();
+        const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = []
+
+        chatMessages.forEach((msg, idx) => {
+          let textContent = msg.text
+          if (idx === 0 && msg.role === "user") {
+            textContent = `${this.systemPrompt}\n\n${msg.text}`
+          }
+          contents.push({
+            role: msg.role === "user" ? "user" : "model",
+            parts: [{ text: textContent }]
+          })
+        })
+
+        const result = await this.model.generateContent({ contents })
+        const response = await result.response
+        return response.text()
       } else {
-        throw new Error("No LLM provider configured");
+        throw new Error("No LLM provider configured")
       }
     } catch (error) {
-      console.error("[LLMHelper] Error in chatWithGemini:", error);
-      throw error;
+      console.error("[LLMHelper] Error in chatWithHistory:", error)
+      throw error
     }
   }
 
-  public async chat(message: string): Promise<string> {
-    return this.chatWithGemini(message);
+  public async chatWithGemini(input: string | Array<{ role: "user" | "gemini"; text: string }>): Promise<string> {
+    if (Array.isArray(input)) {
+      return this.chatWithHistory(input)
+    }
+    return this.chatWithHistory([{ role: "user", text: input }])
+  }
+
+  public async chat(message: string | Array<{ role: "user" | "gemini"; text: string }>): Promise<string> {
+    return this.chatWithGemini(message)
   }
 
   public isUsingOllama(): boolean {

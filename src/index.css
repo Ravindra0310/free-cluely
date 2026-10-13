@@ -72,9 +72,13 @@
   border-radius: 1rem 1rem 0 0;
 }
 
-/* Make sure buttons and interactive elements are not draggable */
+/* Make sure buttons and interactive elements are not draggable & have high-visibility caret */
 button, input, select, textarea, .interactive {
   -webkit-app-region: no-drag;
+}
+
+input, textarea {
+  caret-color: #60a5fa !important;
 }
 
 /* Override for the liquid glass bar - make it draggable */

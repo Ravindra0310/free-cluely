@@ -129,11 +129,13 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         {/* Chat Button */}
         <div className="flex items-center gap-2">
           <button
-            className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
+            className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1.5 cursor-pointer"
             onClick={onChatToggle}
             type="button"
+            title="Toggle Chat (⌘K)"
           >
-            💬 Chat
+            <span>💬 Chat</span>
+            <span className="bg-white/15 px-1 py-0.5 rounded text-[9px] font-mono text-white/80">⌘K</span>
           </button>
         </div>
 
@@ -223,6 +225,24 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                       </div>
                       <p className="text-[10px] leading-relaxed text-white/70 truncate">
                         Generate a solution based on the current problem.
+                      </p>
+                    </div>
+
+                    {/* Chat Command */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="truncate">Open Chat & Type</span>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                            ⌘
+                          </span>
+                          <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                            K
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-white/70 truncate">
+                        Toggle chat interface & focus input. Press Enter ↵ to send message.
                       </p>
                     </div>
                   </div>

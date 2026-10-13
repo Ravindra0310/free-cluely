@@ -70,6 +70,7 @@ export class AppState {
   public getMainWindow(): BrowserWindow | null {
     return this.windowHelper.getMainWindow()
   }
+  
 
   public getView(): "queue" | "solutions" {
     return this.view

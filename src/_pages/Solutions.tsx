@@ -16,6 +16,7 @@ import { ProblemStatementData } from "../types/solutions"
 import { AudioResult } from "../types/audio"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import Debug from "./Debug"
+import FormattedText, { CodeBlock, cleanCodeFence } from "../components/ui/FormattedText"
 
 // (Using global ElectronAPI type from src/types/electron.d.ts)
 
@@ -40,7 +41,7 @@ export const ContentSection = ({
       </div>
     ) : (
       <div className="text-[13px] leading-[1.4] text-gray-100 max-w-[600px]">
-        {content}
+        {typeof content === "string" ? <FormattedText text={content} /> : content}
       </div>
     )}
   </div>
@@ -53,40 +54,45 @@ const SolutionSection = ({
   title: string
   content: React.ReactNode
   isLoading: boolean
-}) => (
-  <div className="space-y-2">
-    <h2 className="text-[13px] font-medium text-white tracking-wide">
-      {title}
-    </h2>
-    {isLoading ? (
-      <div className="space-y-1.5">
-        <div className="mt-4 flex">
-          <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-            Loading solutions...
-          </p>
+}) => {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <h2 className="text-[13px] font-medium text-white tracking-wide">
+          {title}
+        </h2>
+        <div className="space-y-1.5">
+          <div className="mt-4 flex">
+            <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
+              Loading solutions...
+            </p>
+          </div>
         </div>
       </div>
-    ) : (
+    )
+  }
+
+  const rawStr = typeof content === "string" ? content : String(content || "")
+  const hasFences = rawStr.includes("```")
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-[13px] font-medium text-white tracking-wide">
+        {title}
+      </h2>
       <div className="w-full">
-        <SyntaxHighlighter
-          showLineNumbers
-          language="python"
-          style={dracula}
-          customStyle={{
-            maxWidth: "100%",
-            margin: 0,
-            padding: "1rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all"
-          }}
-          wrapLongLines={true}
-        >
-          {content as string}
-        </SyntaxHighlighter>
+        {hasFences ? (
+          <FormattedText text={rawStr} />
+        ) : (
+          (() => {
+            const { code, language } = cleanCodeFence(rawStr)
+            return <CodeBlock code={code} language={language} />
+          })()
+        )}
       </div>
-    )}
-  </div>
-)
+    </div>
+  )
+}
 
 export const ComplexitySection = ({
   timeComplexity,

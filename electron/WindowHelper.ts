@@ -1,4 +1,3 @@
-
 import { BrowserWindow, screen } from "electron"
 import { AppState } from "main"
 import path from "node:path"
@@ -16,10 +15,9 @@ export class WindowHelper {
   private windowSize: { width: number; height: number } | null = null
   private appState: AppState
 
-  // Initialize with explicit number type and 0 value
   private screenWidth: number = 0
   private screenHeight: number = 0
-  private step: number = 0
+  private step: number = 20
   private currentX: number = 0
   private currentY: number = 0
 
@@ -30,27 +28,19 @@ export class WindowHelper {
   public setWindowDimensions(width: number, height: number): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
-    // Get current window position
     const [currentX, currentY] = this.mainWindow.getPosition()
-
-    // Get screen dimensions
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workAreaSize
 
-    // Use 75% width if debugging has occurred, otherwise use 60%
     const maxAllowedWidth = Math.floor(
       workArea.width * (this.appState.getHasDebugged() ? 0.75 : 0.5)
     )
 
-    // Ensure width doesn't exceed max allowed width and height is reasonable
     const newWidth = Math.min(width + 32, maxAllowedWidth)
     const newHeight = Math.ceil(height)
-
-    // Center the window horizontally if it would go off screen
     const maxX = workArea.width - newWidth
     const newX = Math.min(Math.max(currentX, 0), maxX)
 
-    // Update window bounds
     this.mainWindow.setBounds({
       x: newX,
       y: currentY,
@@ -58,7 +48,6 @@ export class WindowHelper {
       height: newHeight
     })
 
-    // Update internal state
     this.windowPosition = { x: newX, y: currentY }
     this.windowSize = { width: newWidth, height: newHeight }
     this.currentX = newX
@@ -72,7 +61,6 @@ export class WindowHelper {
     this.screenWidth = workArea.width
     this.screenHeight = workArea.height
 
-    
     const windowSettings: Electron.BrowserWindowConstructorOptions = {
       width: 400,
       height: 600,
@@ -81,9 +69,10 @@ export class WindowHelper {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
-        preload: path.join(__dirname, "preload.js")
+        preload: path.join(__dirname, "preload.js"),
+        backgroundThrottling: false
       },
-      show: false, // Start hidden, then show after setup
+      show: false,
       alwaysOnTop: true,
       frame: false,
       transparent: true,
@@ -93,12 +82,14 @@ export class WindowHelper {
       focusable: true,
       resizable: true,
       movable: true,
-      x: 100, // Start at a visible position
+      skipTaskbar: true,
+      x: 100,
       y: 100
     }
 
     this.mainWindow = new BrowserWindow(windowSettings)
-    // this.mainWindow.webContents.openDevTools()
+
+    // Primary stealth trigger: Exclude window from all OS capture buffers
     this.mainWindow.setContentProtection(true)
 
     if (process.platform === "darwin") {
@@ -106,32 +97,26 @@ export class WindowHelper {
         visibleOnFullScreen: true
       })
       this.mainWindow.setHiddenInMissionControl(true)
-      this.mainWindow.setAlwaysOnTop(true, "floating")
+      this.mainWindow.setAlwaysOnTop(true, "screen-saver")
+    } else {
+      this.mainWindow.setAlwaysOnTop(true, "screen-saver")
     }
-    if (process.platform === "linux") {
-      // Linux-specific optimizations for better compatibility
-      if (this.mainWindow.setHasShadow) {
-        this.mainWindow.setHasShadow(false)
-      }
-      // Keep window focusable on Linux for proper interaction
-      this.mainWindow.setFocusable(true)
-    } 
-    this.mainWindow.setSkipTaskbar(true)
-    this.mainWindow.setAlwaysOnTop(true)
+
+    if (process.platform === "linux" && this.mainWindow.setHasShadow) {
+      this.mainWindow.setHasShadow(false)
+    }
 
     this.mainWindow.loadURL(startUrl).catch((err) => {
       console.error("Failed to load URL:", err)
     })
 
-    // Show window after loading URL and center it
-    this.mainWindow.once('ready-to-show', () => {
+    this.mainWindow.once("ready-to-show", () => {
       if (this.mainWindow) {
-        // Center the window first
         this.centerWindow()
+        this.mainWindow.setContentProtection(true)
         this.mainWindow.show()
         this.mainWindow.focus()
-        this.mainWindow.setAlwaysOnTop(true)
-        console.log("Window is now visible and centered")
+        this.mainWindow.setAlwaysOnTop(true, "screen-saver")
       }
     })
 
@@ -181,10 +166,7 @@ export class WindowHelper {
   }
 
   public hideMainWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      console.warn("Main window does not exist or is destroyed.")
-      return
-    }
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     const bounds = this.mainWindow.getBounds()
     this.windowPosition = { x: bounds.x, y: bounds.y }
@@ -194,10 +176,7 @@ export class WindowHelper {
   }
 
   public showMainWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      console.warn("Main window does not exist or is destroyed.")
-      return
-    }
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     if (this.windowPosition && this.windowSize) {
       this.mainWindow.setBounds({
@@ -208,8 +187,8 @@ export class WindowHelper {
       })
     }
 
+    this.mainWindow.setContentProtection(true)
     this.mainWindow.showInactive()
-
     this.isWindowVisible = true
   }
 
@@ -222,23 +201,18 @@ export class WindowHelper {
   }
 
   private centerWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      return
-    }
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workAreaSize
     
-    // Get current window size or use defaults
     const windowBounds = this.mainWindow.getBounds()
     const windowWidth = windowBounds.width || 400
     const windowHeight = windowBounds.height || 600
     
-    // Calculate center position
     const centerX = Math.floor((workArea.width - windowWidth) / 2)
     const centerY = Math.floor((workArea.height - windowHeight) / 2)
     
-    // Set window position
     this.mainWindow.setBounds({
       x: centerX,
       y: centerY,
@@ -246,7 +220,6 @@ export class WindowHelper {
       height: windowHeight
     })
     
-    // Update internal state
     this.windowPosition = { x: centerX, y: centerY }
     this.windowSize = { width: windowWidth, height: windowHeight }
     this.currentX = centerX
@@ -254,92 +227,57 @@ export class WindowHelper {
   }
 
   public centerAndShowWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      console.warn("Main window does not exist or is destroyed.")
-      return
-    }
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     this.centerWindow()
+    this.mainWindow.setContentProtection(true)
     this.mainWindow.show()
     this.mainWindow.focus()
-    this.mainWindow.setAlwaysOnTop(true)
+    this.mainWindow.setAlwaysOnTop(true, "screen-saver")
     this.isWindowVisible = true
-    
-    console.log(`Window centered and shown`)
   }
 
-  // New methods for window movement
   public moveWindowRight(): void {
     if (!this.mainWindow) return
-
     const windowWidth = this.windowSize?.width || 0
     const halfWidth = windowWidth / 2
-
-    // Ensure currentX and currentY are numbers
     this.currentX = Number(this.currentX) || 0
     this.currentY = Number(this.currentY) || 0
 
-    this.currentX = Math.min(
-      this.screenWidth - halfWidth,
-      this.currentX + this.step
-    )
-    this.mainWindow.setPosition(
-      Math.round(this.currentX),
-      Math.round(this.currentY)
-    )
+    this.currentX = Math.min(this.screenWidth - halfWidth, this.currentX + this.step)
+    this.mainWindow.setPosition(Math.round(this.currentX), Math.round(this.currentY))
   }
 
   public moveWindowLeft(): void {
     if (!this.mainWindow) return
-
     const windowWidth = this.windowSize?.width || 0
     const halfWidth = windowWidth / 2
-
-    // Ensure currentX and currentY are numbers
     this.currentX = Number(this.currentX) || 0
     this.currentY = Number(this.currentY) || 0
 
     this.currentX = Math.max(-halfWidth, this.currentX - this.step)
-    this.mainWindow.setPosition(
-      Math.round(this.currentX),
-      Math.round(this.currentY)
-    )
+    this.mainWindow.setPosition(Math.round(this.currentX), Math.round(this.currentY))
   }
 
   public moveWindowDown(): void {
     if (!this.mainWindow) return
-
     const windowHeight = this.windowSize?.height || 0
     const halfHeight = windowHeight / 2
-
-    // Ensure currentX and currentY are numbers
     this.currentX = Number(this.currentX) || 0
     this.currentY = Number(this.currentY) || 0
 
-    this.currentY = Math.min(
-      this.screenHeight - halfHeight,
-      this.currentY + this.step
-    )
-    this.mainWindow.setPosition(
-      Math.round(this.currentX),
-      Math.round(this.currentY)
-    )
+    this.currentY = Math.min(this.screenHeight - halfHeight, this.currentY + this.step)
+    this.mainWindow.setPosition(Math.round(this.currentX), Math.round(this.currentY))
   }
 
   public moveWindowUp(): void {
     if (!this.mainWindow) return
-
     const windowHeight = this.windowSize?.height || 0
     const halfHeight = windowHeight / 2
-
-    // Ensure currentX and currentY are numbers
     this.currentX = Number(this.currentX) || 0
     this.currentY = Number(this.currentY) || 0
 
     this.currentY = Math.max(-halfHeight, this.currentY - this.step)
-    this.mainWindow.setPosition(
-      Math.round(this.currentX),
-      Math.round(this.currentY)
-    )
+    this.mainWindow.setPosition(Math.round(this.currentX), Math.round(this.currentY))
   }
 }

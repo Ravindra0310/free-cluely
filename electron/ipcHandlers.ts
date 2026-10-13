@@ -2,6 +2,8 @@
 
 import { ipcMain, app } from "electron"
 import { AppState } from "./main"
+import { execFile } from "child_process"
+import path from "path"
 
 export function initializeIpcHandlers(appState: AppState): void {
   ipcMain.handle(
@@ -103,9 +105,9 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   })
 
-  ipcMain.handle("gemini-chat", async (event, message: string) => {
+  ipcMain.handle("gemini-chat", async (event, input: any) => {
     try {
-      const result = await appState.processingHelper.getLLMHelper().chatWithGemini(message);
+      const result = await appState.processingHelper.getLLMHelper().chatWithGemini(input);
       return result;
     } catch (error: any) {
       console.error("Error in gemini-chat handler:", error);
@@ -194,6 +196,23 @@ export function initializeIpcHandlers(appState: AppState): void {
     } catch (error: any) {
       console.error("Error testing LLM connection:", error);
       return { success: false, error: error.message };
+    }
+  });
+
+  let lastUnhideTime = 0
+  ipcMain.handle("unhide-mouse-cursor", async () => {
+    const now = Date.now()
+    if (now - lastUnhideTime < 150) return
+    lastUnhideTime = now
+
+    if (process.platform === "darwin") {
+      const binPath = path.join(__dirname, "unhide_cursor")
+      const devBinPath = path.join(process.cwd(), "electron", "unhide_cursor")
+      execFile(binPath, (err) => {
+        if (err) {
+          execFile(devBinPath, () => {})
+        }
+      })
     }
   });
 }

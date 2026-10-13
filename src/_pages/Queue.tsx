@@ -10,6 +10,7 @@ import {
 } from "../components/ui/toast"
 import QueueCommands from "../components/Queue/QueueCommands"
 import ModelSelector from "../components/ui/ModelSelector"
+import FormattedText from "../components/ui/FormattedText"
 
 interface QueueProps {
   setView: React.Dispatch<React.SetStateAction<"queue" | "solutions" | "debug">>
@@ -88,11 +89,13 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
 
   const handleChatSend = async () => {
     if (!chatInput.trim()) return
-    setChatMessages((msgs) => [...msgs, { role: "user", text: chatInput }])
+    const newMsg: { role: "user" | "gemini"; text: string } = { role: "user", text: chatInput }
+    const updatedMessages = [...chatMessages, newMsg]
+    setChatMessages(updatedMessages)
     setChatLoading(true)
     setChatInput("")
     try {
-      const response = await window.electronAPI.invoke("gemini-chat", chatInput)
+      const response = await window.electronAPI.invoke("gemini-chat", updatedMessages)
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: response }])
     } catch (err) {
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: "Error: " + String(err) }])
@@ -101,6 +104,29 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
       chatInputRef.current?.focus()
     }
   }
+
+  // Auto-focus chat input when chat opens & handle global keyboard shortcuts (Cmd+K / Ctrl+K, Escape)
+  useEffect(() => {
+    if (isChatOpen) {
+      setTimeout(() => chatInputRef.current?.focus(), 50)
+    }
+  }, [isChatOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K or Ctrl+K or Cmd+Shift+C to toggle chat
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setIsChatOpen((prev) => !prev)
+      } else if (e.key === "Escape" && isChatOpen) {
+        e.preventDefault()
+        setIsChatOpen(false)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isChatOpen])
 
   // Load current model configuration on mount
   useEffect(() => {
@@ -253,7 +279,19 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
           {/* Conditional Chat Interface */}
           {isChatOpen && (
             <div className="mt-4 w-full mx-auto liquid-glass chat-container p-4 flex flex-col">
-            <div className="flex-1 overflow-y-auto mb-3 p-3 rounded-lg bg-white/10 backdrop-blur-md max-h-64 min-h-[120px] glass-content border border-white/20 shadow-lg">
+              <div className="flex items-center justify-between mb-2 text-xs text-gray-300 px-1">
+                <span className="font-semibold text-white/90">💬 Conversation</span>
+                {chatMessages.length > 0 && (
+                  <button
+                    onClick={() => setChatMessages([])}
+                    className="text-red-400/80 hover:text-red-300 transition-colors text-[11px] flex items-center gap-1 cursor-pointer"
+                    title="Clear Chat History"
+                  >
+                    🗑️ Clear History
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto mb-3 p-3 rounded-lg bg-white/10 backdrop-blur-md max-h-64 min-h-[120px] glass-content border border-white/20 shadow-lg">
               {chatMessages.length === 0 ? (
                 <div className="text-sm text-gray-600 text-center mt-8">
                   💬 Chat with {currentModel.provider === "ollama" ? "🏠" : "☁️"} {currentModel.model}
@@ -269,14 +307,14 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
                     className={`w-full flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-3`}
                   >
                     <div
-                      className={`max-w-[80%] px-3 py-1.5 rounded-xl text-xs shadow-md backdrop-blur-sm border ${
+                      className={`max-w-[85%] px-3.5 py-2.5 rounded-xl text-xs shadow-md backdrop-blur-sm border ${
                         msg.role === "user" 
-                          ? "bg-gray-700/80 text-gray-100 ml-12 border-gray-600/40" 
-                          : "bg-white/85 text-gray-700 mr-12 border-gray-200/50"
+                          ? "bg-gray-800/90 text-gray-100 ml-8 border-gray-600/50" 
+                          : "bg-[#181825]/95 text-gray-100 mr-4 border-gray-700/70"
                       }`}
                       style={{ wordBreak: "break-word", lineHeight: "1.4" }}
                     >
-                      {msg.text}
+                      <FormattedText text={msg.text} isUser={msg.role === "user"} />
                     </div>
                   </div>
                 ))
@@ -303,18 +341,27 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
             >
               <input
                 ref={chatInputRef}
-                className="flex-1 rounded-lg px-3 py-2 bg-white/25 backdrop-blur-md text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400/60 border border-white/40 shadow-lg transition-all duration-200"
-                placeholder="Type your message..."
+                className="flex-1 rounded-lg px-3 py-2 bg-white/25 backdrop-blur-md text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400/60 border border-white/40 shadow-lg transition-all duration-200 cursor-text"
+                placeholder="Type your message... (Press Enter ↵ to send, Esc to close)"
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleChatSend();
+                  } else if (e.key === "Escape") {
+                    setIsChatOpen(false);
+                  }
+                }}
                 disabled={chatLoading}
               />
               <button
                 type="submit"
-                className="p-2 rounded-lg bg-gray-600/80 hover:bg-gray-700/80 border border-gray-500/60 flex items-center justify-center transition-all duration-200 backdrop-blur-sm shadow-lg disabled:opacity-50"
+                className="p-2 rounded-lg bg-gray-600/80 hover:bg-gray-700/80 border border-gray-500/60 flex items-center justify-center transition-all duration-200 backdrop-blur-sm shadow-lg disabled:opacity-50 cursor-pointer"
                 disabled={chatLoading || !chatInput.trim()}
                 tabIndex={-1}
                 aria-label="Send"
+                title="Send Message (Enter ↵)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-7.5-15-7.5v6l10 1.5-10 1.5v6z" />
